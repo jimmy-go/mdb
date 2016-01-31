@@ -1,8 +1,10 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"log"
+	"runtime"
 	"time"
 
 	"gopkg.in/mgo.v2"
@@ -31,6 +33,7 @@ type Post struct {
 }
 
 func main() {
+	runtime.GOMAXPROCS(runtime.NumCPU())
 	flag.Parse()
 	log.SetFlags(log.Lshortfile)
 	log.Printf("workers [%d]", *maxWs)
@@ -57,29 +60,34 @@ func main() {
 		Username: *u,
 		Password: *p,
 	}
-	err := mdb.New(pref, di, *maxWs)
+	err := mdb.New(pref, di, *maxWs, *maxQs)
 	if err != nil {
 		panic(err)
 	}
 	log.Println("main : New done")
+
+	go func() {
+		select {
+		case <-time.After(30 * time.Second):
+			panic(errors.New("panic to see current go rutines"))
+		}
+	}()
+
 	for i := 0; i < *tasks; i++ {
-		go func(ii int) {
+		func(ii int) {
 			now := time.Now()
-			var us []*Post
+			var us []Post
 			if err := mdb.Run(pref, "posts", func(c *mgo.Collection) error {
-				// Skip is a very expensive operation.
-				// for pagination use range queries.
-				return c.Find(nil).Limit(6).All(&us)
+				return c.Find(nil).Limit(100).All(&us)
 			}); err != nil {
 				log.Printf("main : err [%s]", err)
 			} else {
-				log.Printf("main : done! [%s] ii [%v] len [%v]", time.Since(now), ii, len(us))
+				log.Printf("main : done! [%s] job number [%v] results len [%v]", time.Since(now), ii, len(us))
 			}
 		}(i)
 	}
-	time.Sleep(1 * time.Minute)
+
 	for {
-		log.Println("sleep 1 minute!")
-		time.Sleep(1 * time.Minute)
+		select {}
 	}
 }

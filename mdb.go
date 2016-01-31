@@ -12,66 +12,20 @@ import (
 
 var (
 	// sessions store all sessions.
-	sessions         = make(map[string]*W)
+	sessions         = make(map[string]*Worker)
 	errNotFound      = errors.New("session not found")
 	errAlreadyInited = errors.New("session already done")
-	errc             = make(chan error)
 )
 
-// W struct define a worker struct.
-type W struct {
+// Worker struct define a worker struct.
+type Worker struct {
 	Db         string
-	Queue      chan jobq.Job
+	queue      chan jobq.Job
 	dispatcher *jobq.Dispatcher
-	Workers    []*mgo.Session
+	Sessions   []*mgo.Session
 	done       chan struct{}
 	last       int
 	sync.RWMutex
-}
-
-// Close close all workers sessions for this prefix.
-func (w *W) run(max int) {
-	q := make(chan jobq.Job, max)
-	w.dispatcher = jobq.NewDispatcher(len(w.Workers), q, errc)
-	w.dispatcher.Run()
-	go func() {
-		select {
-		case <-w.done:
-			for i := range w.Workers {
-				w.Workers[i].Close()
-			}
-		}
-	}()
-}
-
-func (w *W) execute(col string, fn func(*mgo.Collection) error) error {
-	errc := make(chan error, 1)
-	go func() {
-		task := func() error {
-			w.RLock()
-			w.last++
-			if w.last >= len(w.Workers) {
-				w.last = 0
-			}
-			w.RUnlock()
-			sess := w.Workers[w.last]
-			err := fn(sess.DB(w.Db).C(col))
-			if err != nil {
-				log.Printf("execute err [%s]", err)
-			}
-			go func() {
-				errc <- err
-			}()
-			return err
-		}
-		w.dispatcher.Queue <- task
-		// return error
-	}()
-	select {
-	case err := <-errc:
-		return err
-	}
-	return nil
 }
 
 // New dial a mongodb database and stores the session in a map with a prefix
@@ -80,7 +34,7 @@ func (w *W) execute(col string, fn func(*mgo.Collection) error) error {
 // It receives a max number of workers that limit the amount of trafic
 // and load for the driver. The number must be defined by application
 // performance and measurement.
-func New(prefix string, options *mgo.DialInfo, maxSessions int) error {
+func New(prefix string, options *mgo.DialInfo, workers, queueLength int) error {
 	if options == nil {
 		return errors.New("dial info is required")
 	}
@@ -95,17 +49,65 @@ func New(prefix string, options *mgo.DialInfo, maxSessions int) error {
 	}
 	// TODO; Let user define SetMode.
 	sess.SetMode(mgo.Strong, true)
-	w := &W{
-		Db: options.Database,
+
+	w := &Worker{
+		Db:    options.Database,
+		queue: make(chan jobq.Job, queueLength),
 	}
-	for i := 0; i < maxSessions; i++ {
-		w.Workers = append(w.Workers, sess.Copy())
+	for i := 0; i < workers; i++ {
+		w.Sessions = append(w.Sessions, sess.Copy())
 	}
 
-	w.run(maxSessions)
+	w.run(workers)
 
 	// function must be called in main, mutex is not required.
 	sessions[prefix] = w
+	return nil
+}
+
+// Close close all workers sessions for this prefix.
+func (w *Worker) run(maxWorkers int) {
+	errc := make(chan error)
+	go func() {
+		for err := range errc {
+			if err != nil {
+				log.Printf("Worker : run : err [%s]", err)
+			}
+		}
+	}()
+	w.dispatcher = jobq.NewDispatcher(maxWorkers, w.queue, errc)
+	w.dispatcher.Run()
+	select {
+	case <-w.done:
+		log.Printf("run : <-w.done")
+		for i := range w.Sessions {
+			w.Sessions[i].Close()
+		}
+	default:
+		log.Printf("run : default")
+	}
+}
+
+func (w *Worker) execute(col string, fn func(*mgo.Collection) error) error {
+	errc := make(chan error, 1)
+	task := func() error {
+		w.RLock()
+		w.last++
+		if w.last >= len(w.Sessions) {
+			w.last = 0
+		}
+		w.RUnlock()
+		sess := w.Sessions[w.last]
+		errc <- fn(sess.DB(w.Db).C(col))
+		return nil
+	}
+	select {
+	case w.queue <- task:
+	}
+	select {
+	case err := <-errc:
+		return err
+	}
 	return nil
 }
 
