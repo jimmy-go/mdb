@@ -84,7 +84,6 @@ func (w *Worker) run(maxWorkers int) {
 			w.Sessions[i].Close()
 		}
 	default:
-		log.Printf("run : default")
 	}
 }
 
