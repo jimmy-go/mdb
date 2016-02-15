@@ -3,11 +3,13 @@ package main
 import (
 	"errors"
 	"flag"
+	"fmt"
 	"log"
 	"runtime"
 	"time"
 
 	"gopkg.in/mgo.v2"
+	"gopkg.in/mgo.v2/bson"
 
 	"github.com/jimmy-go/mdb"
 )
@@ -18,6 +20,7 @@ var (
 	tasks = flag.Int("tasks", 20, "Number of tasks.")
 
 	hosts  = flag.String("host", "", "Mongo host.")
+	port   = flag.Int("port", 27107, "Mongo port.")
 	dbName = flag.String("database", "", "Mongo database.")
 	u      = flag.String("username", "", "Mongo username.")
 	p      = flag.String("password", "", "Mongo password.")
@@ -40,11 +43,12 @@ func main() {
 	log.Printf("queue len [%d]", *maxQs)
 	log.Printf("tasks [%d]", *tasks)
 	log.Printf("hosts [%v]", *hosts)
+	log.Printf("port [%v]", *port)
 	log.Printf("dbName [%v]", *dbName)
 	log.Printf("u [%v]", *u)
 	log.Printf("p [%v]", *p)
 
-	errc := make(chan error)
+	errc := make(chan error, 1)
 	go func() {
 		for err := range errc {
 			if err != nil {
@@ -54,7 +58,7 @@ func main() {
 	}()
 
 	di := &mgo.DialInfo{
-		Addrs:    []string{*hosts},
+		Addrs:    []string{*hosts + ":" + fmt.Sprintf("%d", *port)},
 		Timeout:  1 * time.Second,
 		Database: *dbName,
 		Username: *u,
@@ -66,28 +70,41 @@ func main() {
 	}
 	log.Println("main : New done")
 
+	// reads
 	go func() {
-		select {
-		case <-time.After(30 * time.Second):
-			panic(errors.New("panic to see current go rutines"))
+		for i := 0; i < *tasks/2; i++ {
+			func(ii int) {
+				now := time.Now()
+				var us []Post
+				if err := mdb.Run(pref, "posts", func(c *mgo.Collection) error {
+					return c.Find(nil).Limit(100).All(&us)
+				}); err != nil {
+					log.Printf("main : err [%s]", err)
+				} else {
+					log.Printf("main : done find [%s] i [%v] results [%v]", time.Since(now), ii, len(us))
+				}
+			}(i)
 		}
 	}()
 
-	for i := 0; i < *tasks; i++ {
-		func(ii int) {
-			now := time.Now()
-			var us []Post
-			if err := mdb.Run(pref, "posts", func(c *mgo.Collection) error {
-				return c.Find(nil).Limit(100).All(&us)
-			}); err != nil {
-				log.Printf("main : err [%s]", err)
-			} else {
-				log.Printf("main : done! [%s] job number [%v] results len [%v]", time.Since(now), ii, len(us))
-			}
-		}(i)
-	}
+	// writes
+	go func() {
+		for i := 0; i < *tasks/2; i++ {
+			func(ii int) {
+				now := time.Now()
+				if err := mdb.Run(pref, "items", func(c *mgo.Collection) error {
+					return c.Insert(bson.M{"element": fmt.Sprintf("%v", ii)})
+				}); err != nil {
+					log.Printf("main : err [%s]", err)
+				} else {
+					log.Printf("main : done insert [%s] i [%v]", time.Since(now), ii)
+				}
+			}(i)
+		}
+	}()
 
-	for {
-		select {}
-	}
+	time.Sleep(5 * time.Second)
+	mdb.Close(pref)
+	time.Sleep(3 * time.Second)
+	panic(errors.New("see goroutines"))
 }
