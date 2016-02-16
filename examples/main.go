@@ -28,11 +28,13 @@ var (
 
 const (
 	pref = "MONGO"
+	col  = "items_test"
 )
 
 // Post struct.
 type Post struct {
-	Link string `bson:"link"`
+	ID   bson.ObjectId `bson:"_id"`
+	Link string        `bson:"link"`
 }
 
 func main() {
@@ -47,6 +49,7 @@ func main() {
 	log.Printf("dbName [%v]", *dbName)
 	log.Printf("u [%v]", *u)
 	log.Printf("p [%v]", *p)
+	log.Printf("collection [%v]", col)
 
 	errc := make(chan error, 1)
 	go func() {
@@ -75,14 +78,19 @@ func main() {
 		for i := 0; i < *tasks/2; i++ {
 			func(ii int) {
 				now := time.Now()
-				var us []Post
-				if err := mdb.Run(pref, "posts", func(c *mgo.Collection) error {
-					return c.Find(nil).Limit(100).All(&us)
-				}); err != nil {
+				var items []*Post
+				err := mdb.Run(pref, col, func(c *mgo.Collection) error {
+					err := c.Find(nil).Limit(10).All(&items)
+					if err != nil {
+						log.Printf("main : err [%s]", err)
+					}
+					return err
+				})
+				if err != nil {
 					log.Printf("main : err [%s]", err)
-				} else {
-					log.Printf("main : done find [%s] i [%v] results [%v]", time.Since(now), ii, len(us))
+					return
 				}
+				log.Printf("main : done find [%s] i [%v] results [%v]", time.Since(now), ii, len(items))
 			}(i)
 		}
 	}()
@@ -92,13 +100,31 @@ func main() {
 		for i := 0; i < *tasks/2; i++ {
 			func(ii int) {
 				now := time.Now()
-				if err := mdb.Run(pref, "items", func(c *mgo.Collection) error {
-					return c.Insert(bson.M{"element": fmt.Sprintf("%v", ii)})
+				if err := mdb.Run(pref, col, func(c *mgo.Collection) error {
+					return c.Insert(bson.M{"link": fmt.Sprintf("%v", ii)})
 				}); err != nil {
 					log.Printf("main : err [%s]", err)
-				} else {
-					log.Printf("main : done insert [%s] i [%v]", time.Since(now), ii)
+					return
 				}
+				log.Printf("main : done insert [%s] i [%v]", time.Since(now), ii)
+			}(i)
+		}
+	}()
+
+	// with
+	// db
+	go func() {
+		for i := 0; i < *tasks/2; i++ {
+			func(ii int) {
+				now := time.Now()
+				var items []*Post
+				if err := mdb.RunWithDB(pref, func(db *mgo.Database) error {
+					return db.C(col).Find(nil).Limit(20).All(&items)
+				}); err != nil {
+					log.Printf("main : err [%s]", err)
+					return
+				}
+				log.Printf("main : DB done find [%s] i [%v] results [%v]", time.Since(now), ii, len(items))
 			}(i)
 		}
 	}()

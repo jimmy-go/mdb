@@ -25,7 +25,7 @@ var (
 type Worker struct {
 	Db         string
 	dispatcher *jobq.Dispatcher
-	Sessions   []*mgo.Session
+	sessionc   chan *mgo.Session
 	done       chan struct{}
 	timeout    time.Duration
 	size       int
@@ -55,16 +55,24 @@ func New(prefix string, options *mgo.DialInfo, workers, Qlen int) error {
 	// TODO; Let user define SetMode.
 	sess.SetMode(mgo.Strong, true)
 
+	log.Printf("New [%s] timeout [%v]", prefix, options.Timeout)
 	if options.Timeout > time.Duration(10*time.Second) {
 		log.Printf("New [%s] timeout is too high", prefix)
+		return errTimeout
+	}
+	if options.Timeout < time.Duration(1*time.Second) {
+		log.Printf("New [%s] timeout is too small", prefix)
+		return errTimeout
 	}
 
 	w := &Worker{
-		Db:   options.Database,
-		size: Qlen,
+		Db:       options.Database,
+		sessionc: make(chan *mgo.Session, workers),
+		timeout:  options.Timeout,
+		size:     Qlen,
 	}
 	for i := 0; i < workers; i++ {
-		w.Sessions = append(w.Sessions, sess.Copy())
+		w.sessionc <- sess.Copy()
 	}
 
 	errc := make(chan error, 1)
@@ -86,29 +94,28 @@ func New(prefix string, options *mgo.DialInfo, workers, Qlen int) error {
 
 // stop close all workers sessions for this prefix.
 func (w *Worker) stop() {
-	w.RLock()
-	for i := range w.Sessions {
-		w.Sessions[i].Close()
+	for sess := range w.sessionc {
+		sess.Close()
 	}
-	w.RUnlock()
-}
-
-func (w *Worker) session() *mgo.Session {
-	w.last++
-	if w.last >= int32(len(w.Sessions)) {
-		w.last = 0
-	}
-	w.RLock()
-	s := w.Sessions[w.last]
-	w.RUnlock()
-	return s
+	log.Printf("Worker : stop : sessions close")
 }
 
 func (w *Worker) execute(col string, fn func(*mgo.Collection) error) error {
 	errc := make(chan error, 1)
 	task := func() error {
-		sess := w.session()
-		errc <- fn(sess.DB(w.Db).C(col))
+		// take session from worker.
+		select {
+		case session := <-w.sessionc:
+			err := fn(session.DB(w.Db).C(col))
+			select {
+			case errc <- err:
+			}
+
+			// return session to worker.
+			select {
+			case w.sessionc <- session:
+			}
+		}
 		return nil
 	}
 	w.dispatcher.Add(task)
@@ -116,15 +123,28 @@ func (w *Worker) execute(col string, fn func(*mgo.Collection) error) error {
 	case err := <-errc:
 		return err
 	case <-time.After(w.timeout):
+		log.Printf("Worker : execute : err timeout, [%v]", w.timeout)
+		return errTimeout
 	}
 	return nil
 }
 
-func (w *Worker) executeDb(col string, fn func(*mgo.Database) error) error {
+func (w *Worker) executeDb(fn func(*mgo.Database) error) error {
 	errc := make(chan error, 1)
 	task := func() error {
-		sess := w.session()
-		errc <- fn(sess.DB(w.Db))
+		// take session from worker.
+		select {
+		case session := <-w.sessionc:
+			err := fn(session.DB(w.Db))
+			select {
+			case errc <- err:
+			}
+
+			// return session to worker.
+			select {
+			case w.sessionc <- session:
+			}
+		}
 		return nil
 	}
 	w.dispatcher.Add(task)
@@ -148,12 +168,12 @@ func Run(prefix, col string, fn func(*mgo.Collection) error) error {
 }
 
 // RunWithDB is like Run for specific cases where pass a mgo.Database is required.
-func RunWithDB(prefix, col string, fn func(*mgo.Database) error) error {
+func RunWithDB(prefix string, fn func(db *mgo.Database) error) error {
 	w, ok := teams[prefix]
 	if !ok {
 		return errNotFound
 	}
-	return w.executeDb(col, fn)
+	return w.executeDb(fn)
 }
 
 // Close closes all worker sessions from prefix session.
