@@ -96,8 +96,11 @@ func New(prefix string, options *mgo.DialInfo, workers, Qlen int) error {
 func (w *Worker) stop() {
 	for sess := range w.sessionc {
 		sess.Close()
+		// if no more sessions available then return.
+		if len(w.sessionc) < 1 {
+			return
+		}
 	}
-	log.Printf("Worker : stop : sessions close")
 }
 
 func (w *Worker) execute(col string, fn func(*mgo.Collection) error) error {
