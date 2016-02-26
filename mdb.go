@@ -22,6 +22,7 @@ var (
 	errAlreadyInited  = errors.New("session already done")
 	errDialInfoEmpty  = errors.New("dial info is empty")
 	errTimeout        = errors.New("operation timeout")
+	errPrefixNotFound = errors.New("prefix not found")
 )
 
 // Worker struct define a worker struct.
@@ -197,10 +198,11 @@ func RunWithDB(prefix string, fn func(db *mgo.Database) error) error {
 }
 
 // Close closes all worker sessions from prefix session.
-func Close(prefix string) {
+func Close(prefix string) error {
 	w, ok := teams[prefix]
 	if !ok {
-		return
+		return errPrefixNotFound
 	}
 	w.stop()
+	return nil
 }
