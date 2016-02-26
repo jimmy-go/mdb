@@ -39,7 +39,7 @@ type Worker struct {
 // New dial a mongodb database and stores the session in a map with a prefix
 // so must be called once, then you should be cloning or copying sessions.
 //
-// It receives a max number of workers that limit the amount of trafic
+// It receives a max number of workers that limit the amount of traffic
 // and load for the driver. The number must be defined by application
 // performance and measurement.
 func New(prefix string, options *mgo.DialInfo, workers, Qlen int) error {
@@ -148,7 +148,6 @@ func (w *Worker) execute(col string, fn func(*mgo.Collection) error) error {
 		log.Printf("Worker : execute : err timeout, [%v]", w.timeout)
 		return errTimeout
 	}
-	return nil
 }
 
 func (w *Worker) executeDb(fn func(*mgo.Database) error) error {
@@ -176,7 +175,6 @@ func (w *Worker) executeDb(fn func(*mgo.Database) error) error {
 	case <-time.After(w.timeout):
 		return errTimeout
 	}
-	return nil
 }
 
 // Run pass a query to the job queue. If queue is full then must be wait until
