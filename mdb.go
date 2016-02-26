@@ -15,10 +15,13 @@ var (
 	// teams store all sessions.
 	teams = make(map[string]*Worker)
 
-	errNotFound      = errors.New("session not found")
-	errAlreadyInited = errors.New("session already done")
-	errDialInfoEmpty = errors.New("dial info is empty")
-	errTimeout       = errors.New("operation timeout")
+	errBadQueueSize   = errors.New("invalid queue length, must be greater than 0")
+	errPrefixEmpty    = errors.New("prefix value is empty")
+	errBadWorkersSize = errors.New("invalid workers size count")
+	errNotFound       = errors.New("session not found")
+	errAlreadyInited  = errors.New("session already done")
+	errDialInfoEmpty  = errors.New("dial info is empty")
+	errTimeout        = errors.New("operation timeout")
 )
 
 // Worker struct define a worker struct.
@@ -40,8 +43,17 @@ type Worker struct {
 // and load for the driver. The number must be defined by application
 // performance and measurement.
 func New(prefix string, options *mgo.DialInfo, workers, Qlen int) error {
+	if len(prefix) < 1 {
+		return errPrefixEmpty
+	}
 	if options == nil {
 		return errDialInfoEmpty
+	}
+	if workers < 1 {
+		return errBadWorkersSize
+	}
+	if Qlen < 1 {
+		return errBadQueueSize
 	}
 	_, ok := teams[prefix]
 	if ok {
@@ -77,9 +89,16 @@ func New(prefix string, options *mgo.DialInfo, workers, Qlen int) error {
 
 	errc := make(chan error, 1)
 	go func() {
-		for err := range errc {
-			if err != nil {
-				log.Printf("New : err [%s]", err)
+		for {
+			select {
+			case err, ok := <-errc:
+				if !ok {
+					log.Printf("New : exit errrc")
+					return
+				}
+				if err != nil {
+					log.Printf("New : err [%s]", err)
+				}
 			}
 		}
 	}()
