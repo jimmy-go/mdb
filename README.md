@@ -1,7 +1,6 @@
 #### mdb
 
-MongoDB session management for production controlled by workers.
-
+MongoDB management for production environments controlled by workers.
 
 [![License MIT](https://img.shields.io/npm/l/express.svg)](http://opensource.org/licenses/MIT)
 [![Build Status](https://travis-ci.org/jimmy-go/jobQ.svg?branch=master)](https://travis-ci.org/jimmy-go/jobQ)
@@ -30,7 +29,7 @@ err = mdb.Run("mycustomprefix", "mycollection", func(c *mgo.Collection) error {
 })
 ```
 
-And when you has have done your stuff close the connections and quit all the workers with:
+And when you had have done your stuff close the connections and quit all the workers with:
 ```go
 err = mdb.Close("mycustomprefix")
 ```
@@ -179,6 +178,11 @@ func main() {
 }
 ```
 
+##### Why
+
+In most projects I've been working on a thin layer for control database consumption was needed.
+Some alternatives was adding a load balancer but it has a money cost so I think this solution it better fits me.
+Of course comments and critics are welcome :)
 
 LICENCE:
 
