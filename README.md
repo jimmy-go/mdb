@@ -180,7 +180,7 @@ func main() {
 
 ##### Why
 
-In most projects I've been working on a thin layer for control database consumption was needed.
+In most projects I've been working on, a thin layer for control database consumption was needed.
 Some alternatives was adding a load balancer but it has a money cost so I think this solution it better fits me.
 Of course comments and critics are welcome :)
 
