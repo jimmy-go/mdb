@@ -85,10 +85,11 @@ func TestNew(t *testing.T) {
 		if err == nil {
 			log.Printf("err [%s]", err)
 			t.Fail()
-		}
-		if err.Error() != expected {
-			log.Printf("err [%s]", err)
-			t.Fail()
+		} else {
+			if err.Error() != expected {
+				log.Printf("err [%s]", err)
+				t.Fail()
+			}
 		}
 
 		c.KillRemove()
