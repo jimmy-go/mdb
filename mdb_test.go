@@ -1,6 +1,7 @@
 package mdb
 
 import (
+	"fmt"
 	"log"
 	"testing"
 	"time"
@@ -62,7 +63,7 @@ func TestNew(t *testing.T) {
 			log.Printf("err [%s]", err)
 			t.Fail()
 		}
-		Close("x")
+		err = Close("x")
 	}
 	// fail connection.
 	{
@@ -78,32 +79,36 @@ func TestNew(t *testing.T) {
 			t.Fail()
 		}
 	}
+	// already inited
+	//	{
+	//		expected := "session already done"
+	//		di := &mgo.DialInfo{
+	//			Addrs:    []string{},
+	//			Database: "test",
+	//			Timeout:  time.Millisecond,
+	//		}
+	//	_ = New("x", di, 1, 1)
+	//		err = New("x", di, 1, 1)
+	//		if err.Error() != expected {
+	//			log.Printf("err [%s]", err)
+	//			t.Fail()
+	//		}
+	//	}
 
 	// WORKING SCENARIO
 	// execute
 	{
-		var db *mgo.Session
-		c, err := dockertest.ConnectToMongoDB(15, time.Second, func(url string) bool {
-			// Check if postgres is responsive...
-			var err error
-			db, err = mgo.Dial(url)
-			if err != nil {
-				return false
-			}
-			return db.Ping() == nil
-		})
-		return
-		// TODO;
+		c, ip, port, err := dockertest.SetupMongoContainer()
 		if err != nil {
-			log.Fatalf("Could not connect to database: %s", err)
+			log.Printf("err [%s]", err)
 			t.Fail()
 		}
-
-		// Close database connection.
-		db.Close()
+		log.Printf("c [%v]", c)
+		log.Printf("ip [%v]", ip)
+		log.Printf("port [%v]", port)
 
 		di := &mgo.DialInfo{
-			Addrs:    []string{"localhost:27017"},
+			Addrs:    []string{fmt.Sprintf("%v:%v", ip, port)},
 			Database: "test",
 			Timeout:  time.Second,
 		}
