@@ -6,6 +6,7 @@ MongoDB management for production environments controlled by workers.
 [![Build Status](https://travis-ci.org/jimmy-go/mdb.svg?branch=master)](https://travis-ci.org/jimmy-go/mdb)
 [![Go Report Card](https://goreportcard.com/badge/github.com/jimmy-go/mdb)](https://goreportcard.com/report/github.com/jimmy-go/mdb)
 [![GoDoc](http://godoc.org/github.com/jimmy-go/mdb?status.png)](http://godoc.org/github.com/jimmy-go/mdb)
+[![Coverage Status](https://coveralls.io/repos/github/jimmy-go/mdb/badge.svg?branch=master)](https://coveralls.io/github/jimmy-go/mdb?branch=master)
 
 ##
 
@@ -22,7 +23,7 @@ Declare a new connection at start:
 mdb.New("mycustomprefix", dialInfo, workers, queueLength)
 ```
 
-Then you can run queries like this:
+Then you can run queries this way:
 ```go
 err = mdb.Run("mycustomprefix", "mycollection", func(c *mgo.Collection) error {
     return c.Find(nil).Limit(20).All(&items)
@@ -178,7 +179,9 @@ func main() {
 }
 ```
 
-##### Why
+---
+
+Why
 
 In most projects I've been working on, a thin layer for control database consumption was needed.
 Some alternatives was adding a load balancer but it has a money cost so I think this solution it better fits me.

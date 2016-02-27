@@ -88,22 +88,7 @@ func New(prefix string, options *mgo.DialInfo, workers, Qlen int) error {
 		w.sessionc <- sess.Copy()
 	}
 
-	errc := make(chan error, 1)
-	go func() {
-		for {
-			select {
-			case err, ok := <-errc:
-				if !ok {
-					log.Printf("New : exit errrc")
-					return
-				}
-				if err != nil {
-					log.Printf("New : err [%s]", err)
-				}
-			}
-		}
-	}()
-	w.dispatcher, err = jobq.New(workers, Qlen, errc)
+	w.dispatcher, err = jobq.New(workers, Qlen)
 	if err != nil {
 		return err
 	}
