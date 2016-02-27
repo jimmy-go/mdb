@@ -38,33 +38,6 @@ func TestNew(t *testing.T) {
 			t.Fail()
 		}
 	}
-	// bad workers size count.
-	{
-		expected := "invalid workers size count"
-		di := &mgo.DialInfo{}
-		err := New("x", di, -1, -1)
-		if err == nil {
-			t.Fail()
-		}
-		if err.Error() != expected {
-			log.Printf("err [%s]", err)
-			t.Fail()
-		}
-	}
-	// bad queue length.
-	{
-		expected := "invalid queue length, must be greater than 0"
-		di := &mgo.DialInfo{}
-		err := New("x", di, 1, -1)
-		if err == nil {
-			t.Fail()
-		}
-		if err.Error() != expected {
-			log.Printf("err [%s]", err)
-			t.Fail()
-		}
-		err = Close("x")
-	}
 	// fail connection.
 	{
 		expected := "no reachable servers"
@@ -79,21 +52,85 @@ func TestNew(t *testing.T) {
 			t.Fail()
 		}
 	}
+	// invalid timeout
+	{
+		expected := "invalid timeout duration"
+		di := &mgo.DialInfo{
+			Addrs:    []string{},
+			Database: "test",
+			Timeout:  11 * time.Second,
+		}
+		err := New("yy", di, 1, 1)
+		if err.Error() != expected {
+			log.Printf("err [%s]", err)
+			t.Fail()
+		}
+	}
 	// already inited
-	//	{
-	//		expected := "session already done"
-	//		di := &mgo.DialInfo{
-	//			Addrs:    []string{},
-	//			Database: "test",
-	//			Timeout:  time.Millisecond,
-	//		}
-	//	_ = New("x", di, 1, 1)
-	//		err = New("x", di, 1, 1)
-	//		if err.Error() != expected {
-	//			log.Printf("err [%s]", err)
-	//			t.Fail()
-	//		}
-	//	}
+	{
+		c, ip, port, err := dockertest.SetupMongoContainer()
+		if err != nil {
+			log.Printf("err [%s]", err)
+			t.Fail()
+		}
+
+		expected := "session already done"
+		di := &mgo.DialInfo{
+			Addrs:    []string{fmt.Sprintf("%v:%v", ip, port)},
+			Database: "test",
+			Timeout:  time.Second,
+		}
+		_ = New("yy", di, 1, 1)
+		err = New("yy", di, 1, 1)
+		if err.Error() != expected {
+			log.Printf("err [%s]", err)
+			t.Fail()
+		}
+
+		c.KillRemove()
+	}
+	// bad jobq workers size
+	{
+		c, ip, port, err := dockertest.SetupMongoContainer()
+		if err != nil {
+			log.Printf("err [%s]", err)
+			t.Fail()
+		}
+
+		expected := "invalid worker size"
+		di := &mgo.DialInfo{
+			Addrs:    []string{fmt.Sprintf("%v:%v", ip, port)},
+			Database: "test",
+			Timeout:  time.Second,
+		}
+		err = New("x100", di, -1, 1)
+		if err.Error() != expected {
+			log.Printf("err [%s]", err)
+			t.Fail()
+		}
+		c.KillRemove()
+	}
+	// bad jobq queue size
+	{
+		c, ip, port, err := dockertest.SetupMongoContainer()
+		if err != nil {
+			log.Printf("err [%s]", err)
+			t.Fail()
+		}
+
+		expected := "invalid queue size"
+		di := &mgo.DialInfo{
+			Addrs:    []string{fmt.Sprintf("%v:%v", ip, port)},
+			Database: "test",
+			Timeout:  time.Second,
+		}
+		err = New("x101", di, 1, -1)
+		if err.Error() != expected {
+			log.Printf("err [%s]", err)
+			t.Fail()
+		}
+		c.KillRemove()
+	}
 
 	// WORKING SCENARIO
 	// execute
@@ -103,9 +140,6 @@ func TestNew(t *testing.T) {
 			log.Printf("err [%s]", err)
 			t.Fail()
 		}
-		log.Printf("c [%v]", c)
-		log.Printf("ip [%v]", ip)
-		log.Printf("port [%v]", port)
 
 		di := &mgo.DialInfo{
 			Addrs:    []string{fmt.Sprintf("%v:%v", ip, port)},
@@ -118,7 +152,95 @@ func TestNew(t *testing.T) {
 			t.Fail()
 		}
 
-		// Clean up image.
+		// ok Run
+		err = Run("x", "coltest", func(c *mgo.Collection) error {
+			x := struct {
+				Message string `bson:"msg"`
+			}{"hello world"}
+			return c.Insert(x)
+		})
+		if err != nil {
+			log.Printf("insert err : [%s]", err)
+			t.Fail()
+		}
+
+		// ok RunWithDB
+		err = RunWithDB("x", func(db *mgo.Database) error {
+			x := struct {
+				Message string `bson:"msg"`
+			}{"hello world"}
+			return db.C("ottos").Insert(x)
+		})
+		if err != nil {
+			log.Printf("insert with DB err : [%s]", err)
+			t.Fail()
+		}
+
+		expected := "session not found"
+		// prefix not found
+		err = Run("x1", "coltest", func(c *mgo.Collection) error {
+			x := struct {
+				Message string `bson:"msg"`
+			}{"hello world"}
+			return c.Insert(x)
+		})
+		if err.Error() != expected {
+			log.Printf("insert err : [%s]", err)
+			t.Fail()
+		}
+		err = RunWithDB("x1", func(db *mgo.Database) error {
+			x := struct {
+				Message string `bson:"msg"`
+			}{"hello world"}
+			return db.C("ottos").Insert(x)
+		})
+		if err.Error() != expected {
+			log.Printf("insert with DB err : [%s]", err)
+			t.Fail()
+		}
+
+		expected = "operation timeout"
+		// timeout Run
+		err = Run("x", "coltest", func(c *mgo.Collection) error {
+			time.Sleep(2 * time.Second)
+			x := struct {
+				Message string `bson:"msg"`
+			}{"hello world"}
+			return c.Insert(x)
+		})
+		if err.Error() != expected {
+			log.Printf("insert err : [%s]", err)
+			t.Fail()
+		}
+
+		// timeout RunWithDB
+		err = RunWithDB("x", func(db *mgo.Database) error {
+			time.Sleep(2 * time.Second)
+			x := struct {
+				Message string `bson:"msg"`
+			}{"hello world"}
+			return db.C("ottos").Insert(x)
+		})
+		if err.Error() != expected {
+			log.Printf("insert with DB err : [%s]", err)
+			t.Fail()
+		}
+
+		// close prefix not found
+		expected = "prefix not found"
+		err = Close("x3")
+		if err.Error() != expected {
+			log.Printf("Close x3 err : [%s]", err)
+			t.Fail()
+		}
+
+		// end work and close
+		err = Close("x")
+		if err != nil {
+			log.Printf("Close x err : [%s]", err)
+			t.Fail()
+		}
+
 		c.KillRemove()
 	}
 }

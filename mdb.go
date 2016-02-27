@@ -2,7 +2,6 @@ package mdb
 
 import (
 	"errors"
-	"log"
 	"sync"
 	"time"
 
@@ -15,13 +14,12 @@ var (
 	// teams store all sessions.
 	teams = make(map[string]*Worker)
 
-	errBadQueueSize   = errors.New("invalid queue length, must be greater than 0")
 	errPrefixEmpty    = errors.New("prefix value is empty")
-	errBadWorkersSize = errors.New("invalid workers size count")
 	errNotFound       = errors.New("session not found")
 	errAlreadyInited  = errors.New("session already done")
 	errDialInfoEmpty  = errors.New("dial info is empty")
 	errTimeout        = errors.New("operation timeout")
+	errInvalidTimeout = errors.New("invalid timeout duration")
 	errPrefixNotFound = errors.New("prefix not found")
 )
 
@@ -50,11 +48,8 @@ func New(prefix string, options *mgo.DialInfo, workers, Qlen int) error {
 	if options == nil {
 		return errDialInfoEmpty
 	}
-	if workers < 1 {
-		return errBadWorkersSize
-	}
-	if Qlen < 1 {
-		return errBadQueueSize
+	if options.Timeout > time.Duration(10*time.Second) {
+		return errInvalidTimeout
 	}
 	_, ok := teams[prefix]
 	if ok {
@@ -68,29 +63,20 @@ func New(prefix string, options *mgo.DialInfo, workers, Qlen int) error {
 	// TODO; Let user define SetMode.
 	sess.SetMode(mgo.Strong, true)
 
-	log.Printf("New [%s] timeout [%v]", prefix, options.Timeout)
-	if options.Timeout > time.Duration(10*time.Second) {
-		log.Printf("New [%s] timeout is too high", prefix)
-		return errTimeout
-	}
-	if options.Timeout < time.Duration(1*time.Second) {
-		log.Printf("New [%s] timeout is too small", prefix)
-		return errTimeout
-	}
-
 	w := &Worker{
-		Db:       options.Database,
-		sessionc: make(chan *mgo.Session, workers),
-		timeout:  options.Timeout,
-		size:     Qlen,
-	}
-	for i := 0; i < workers; i++ {
-		w.sessionc <- sess.Copy()
+		Db:      options.Database,
+		timeout: options.Timeout,
+		size:    Qlen,
 	}
 
 	w.dispatcher, err = jobq.New(workers, Qlen)
 	if err != nil {
 		return err
+	}
+
+	w.sessionc = make(chan *mgo.Session, workers)
+	for i := 0; i < workers; i++ {
+		w.sessionc <- sess.Copy()
 	}
 
 	teams[prefix] = w
@@ -131,7 +117,6 @@ func (w *Worker) execute(col string, fn func(*mgo.Collection) error) error {
 	case err := <-errc:
 		return err
 	case <-time.After(w.timeout):
-		log.Printf("Worker : execute : err timeout, [%v]", w.timeout)
 		return errTimeout
 	}
 }
