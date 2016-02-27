@@ -5,9 +5,8 @@ import (
 	"sync"
 	"time"
 
-	"gopkg.in/mgo.v2"
-
 	"github.com/jimmy-go/jobq"
+	"gopkg.in/mgo.v2"
 )
 
 var (
