@@ -6,7 +6,7 @@ MongoDB management for production environments controlled by workers.
 [![Build Status](https://travis-ci.org/jimmy-go/mdb.svg?branch=master)](https://travis-ci.org/jimmy-go/mdb)
 [![Go Report Card](https://goreportcard.com/badge/github.com/jimmy-go/mdb)](https://goreportcard.com/report/github.com/jimmy-go/mdb)
 [![GoDoc](http://godoc.org/github.com/jimmy-go/mdb?status.png)](http://godoc.org/github.com/jimmy-go/mdb)
-[![Coverage Status](https://coveralls.io/repos/github/jimmy-go/mdb/badge.svg?branch=master)](https://coveralls.io/github/jimmy-go/mdb?branch=master)
+[![Coverage Status](https://coveralls.io/repos/github/jimmy-go/mdb/badge.svg?branch=master&1)](https://coveralls.io/github/jimmy-go/mdb?branch=master)
 
 
 ##
