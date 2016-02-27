@@ -82,6 +82,10 @@ func TestNew(t *testing.T) {
 		}
 		_ = New("yy", di, 1, 1)
 		err = New("yy", di, 1, 1)
+		if err == nil {
+			log.Printf("err [%s]", err)
+			t.Fail()
+		}
 		if err.Error() != expected {
 			log.Printf("err [%s]", err)
 			t.Fail()
