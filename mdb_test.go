@@ -60,7 +60,7 @@ func TestNew(t *testing.T) {
 			Database: "test",
 			Timeout:  11 * time.Second,
 		}
-		err := New("yy", di, 1, 1)
+		err := New("f", di, 1, 1)
 		if err.Error() != expected {
 			log.Printf("err [%s]", err)
 			t.Fail()
