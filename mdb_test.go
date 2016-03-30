@@ -26,6 +26,31 @@ func TestNew(t *testing.T) {
 			t.Fail()
 		}
 	}
+	// prefix case insensitive
+	{
+		expected := "session already done"
+		c, ip, port, err := dockertest.SetupMongoContainer()
+		if err != nil {
+			log.Printf("err [%s]", err)
+			t.Fail()
+		}
+		di := &mgo.DialInfo{
+			Addrs:    []string{fmt.Sprintf("%v:%v", ip, port)},
+			Database: "test",
+			Timeout:  time.Second,
+		}
+		err = New("A", di, 1, 1)
+		err = New("a", di, 1, 1)
+		if err == nil {
+			t.Fail()
+		}
+		if err.Error() != expected {
+			log.Printf("err [%s]", err)
+			t.Fail()
+		}
+		c.KillRemove()
+	}
+
 	// dial info is nil
 	{
 		expected := "dial info is empty"

@@ -2,6 +2,7 @@ package mdb
 
 import (
 	"errors"
+	"strings"
 	"sync"
 	"time"
 
@@ -44,6 +45,7 @@ func New(prefix string, options *mgo.DialInfo, workers, Qlen int) error {
 	if len(prefix) < 1 {
 		return errPrefixEmpty
 	}
+	prefix = strings.ToLower(prefix)
 	if options == nil {
 		return errDialInfoEmpty
 	}
