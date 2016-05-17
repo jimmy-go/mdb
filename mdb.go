@@ -45,14 +45,14 @@ func New(prefix string, options *mgo.DialInfo, workers, Qlen int) error {
 	if len(prefix) < 1 {
 		return errPrefixEmpty
 	}
-	prefix = strings.ToLower(prefix)
+	pref := strings.ToLower(prefix)
 	if options == nil {
 		return errDialInfoEmpty
 	}
 	if options.Timeout > time.Duration(10*time.Second) {
 		return errInvalidTimeout
 	}
-	_, ok := teams[prefix]
+	_, ok := teams[pref]
 	if ok {
 		return errAlreadyInited
 	}
@@ -80,7 +80,7 @@ func New(prefix string, options *mgo.DialInfo, workers, Qlen int) error {
 		w.sessionc <- sess.Copy()
 	}
 
-	teams[prefix] = w
+	teams[pref] = w
 	return nil
 }
 
@@ -152,7 +152,8 @@ func (w *Worker) executeDb(fn func(*mgo.Database) error) error {
 // Run pass a query to the job queue. If queue is full then must be wait until
 // some worker is empty.
 func Run(prefix, col string, fn func(*mgo.Collection) error) error {
-	w, ok := teams[prefix]
+	pref := strings.ToLower(prefix)
+	w, ok := teams[pref]
 	if !ok {
 		return errNotFound
 	}
@@ -161,7 +162,8 @@ func Run(prefix, col string, fn func(*mgo.Collection) error) error {
 
 // RunWithDB is like Run for specific cases where pass a mgo.Database is required.
 func RunWithDB(prefix string, fn func(db *mgo.Database) error) error {
-	w, ok := teams[prefix]
+	pref := strings.ToLower(prefix)
+	w, ok := teams[pref]
 	if !ok {
 		return errNotFound
 	}
@@ -170,7 +172,8 @@ func RunWithDB(prefix string, fn func(db *mgo.Database) error) error {
 
 // Close closes all worker sessions from prefix session.
 func Close(prefix string) error {
-	w, ok := teams[prefix]
+	pref := strings.ToLower(prefix)
+	w, ok := teams[pref]
 	if !ok {
 		return errPrefixNotFound
 	}

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"log"
@@ -70,7 +71,7 @@ func main() {
 
 	// make some reads from db.
 	go func() {
-		for i := 0; i < *tasks/2; i++ {
+		for i := 0; i < *tasks; i++ {
 			func(ii int) {
 				now := time.Now()
 				var items []*Post
@@ -94,7 +95,7 @@ func main() {
 
 	// do some writes.
 	go func() {
-		for i := 0; i < *tasks/2; i++ {
+		for i := 0; i < *tasks; i++ {
 			func(ii int) {
 				now := time.Now()
 				// Run queries passing prefix connections, collection name and
@@ -112,7 +113,7 @@ func main() {
 
 	// run operations with *mgo.Database
 	go func() {
-		for i := 0; i < *tasks/2; i++ {
+		for i := 0; i < *tasks; i++ {
 			func(ii int) {
 				now := time.Now()
 				var items []*Post
@@ -134,6 +135,6 @@ func main() {
 	mdb.Close(pref)
 
 	// sometimes I want to know how many goroutines are running.
-	// time.Sleep(3 * time.Second)
-	// panic(errors.New("see goroutines"))
+	time.Sleep(3 * time.Second)
+	panic(errors.New("see goroutines"))
 }
